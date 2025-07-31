@@ -166,6 +166,35 @@ class DataStorage {
         }
     }
     
+    // MARK: - Real-time Depth Visualization Support
+    
+    func transmitDepthForVisualization(depthData: CVPixelBuffer) {
+        if !readyToSend {
+            return
+        }
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let depthDataRaw = self.convertDepthData(depthData: depthData) else {
+                print("Failed to convert depth data for visualization")
+                return
+            }
+            
+            // Create data packet: size (4 bytes) + depth data
+            var packet = Data()
+            
+            // Add data size (4 bytes, big-endian)
+            let dataSize = UInt32(depthDataRaw.count)
+            let sizeBytes = withUnsafeBytes(of: dataSize.bigEndian) { Data($0) }
+            packet.append(sizeBytes)
+            
+            // Add depth data
+            packet.append(depthDataRaw)
+            
+            // Send the packet
+            self.socketManager.sendRawData(packet)
+        }
+    }
+    
     func transmitConfig(calibrationData: AVCameraCalibrationData, fileName: String) {
         if !readyToSend {
             print("Fail to establish socket for data transmission.")
@@ -195,7 +224,7 @@ class DataStorage {
         dateFormatter.dateFormat = "yyyyMMdd_HHmmss_SS"
         let timestamp = dateFormatter.string(from: Date())
         
-        return timestamp + "_" + String(format: "frame%06d", frameCounter)
+        return timestamp + "_" + String(format: "frame%08d", frameCounter)
     }
     
     func eventName() -> String {

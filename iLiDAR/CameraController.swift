@@ -237,8 +237,8 @@ extension CameraController: AVCaptureDataOutputSynchronizerDelegate {
         frameCounter += 1
 
         if self.enableNetworkTransfer{
-            // Prevent frameCounter overflow, reset every 1000 frames
-            if frameCounter > 1000 {
+            // Reset frame counter only when it reaches maximum value (99999999 for 8-digit format)
+            if frameCounter > 99999999 {
                 frameCounter = 1
             }
             

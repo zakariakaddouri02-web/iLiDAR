@@ -78,8 +78,8 @@ def visualize_depth_and_color(depth_data, color_image):
 
 if __name__ == "__main__":
     # replace to your files
-    depth_file_path = "./example_data/example_depth_data.bin"  # Path to the raw depth data file
-    color_image_path = "./example_data/example_rgb_image.jpg"  # Path to the color image file
+    depth_file_path = "./uploads/20241209_140358_20241209_140400_11_frame001478.bin"  # Path to the raw depth data file
+    color_image_path = "./uploads/20241209_140358_20241209_140400_11_frame001478.jpg"  # Path to the color image file
 
     depth_width = 320
     depth_height = 240

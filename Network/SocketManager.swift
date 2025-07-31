@@ -121,4 +121,11 @@ class SocketManager {
     func sendCSV(fileName: String, data: Data, chunkSize: Int = 1024) {
         sendData(dataType: .csv, fileName: fileName, data: data, chunkSize: chunkSize)
     }
+    
+    // MARK: - Real-time Visualization Support
+    
+    func sendRawData(_ data: Data) {
+        // Send raw data without packet structure for real-time visualization
+        socketHandler.sendMyData(data)
+    }
 }
