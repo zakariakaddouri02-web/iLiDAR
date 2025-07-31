@@ -21,13 +21,18 @@ class CameraManager: ObservableObject, CaptureDataReceiver {
             controller.isFilteringEnabled = isFilteringDepth
         }
     }
-    @Published var orientation = UIDevice.current.orientation
+    @Published var orientation = UIDevice.current.orientation // 使用当前设备方向
     @Published var waitingForCapture = false
     @Published var processingCapturedResult = false
     @Published var dataAvailable = false
     
     @Published var enableNetworkTransfer: Bool = false
     @Published var eventName: String = ""
+    @Published var transmissionFrequency: Int = 4 { // 默认4 FPS
+        didSet {
+            controller.transmissionFrequency = transmissionFrequency
+        }
+    }
     
     let controller: CameraController
     var cancellables = Set<AnyCancellable>()
@@ -41,6 +46,9 @@ class CameraManager: ObservableObject, CaptureDataReceiver {
         controller.startStream()
         isFilteringDepth = controller.isFilteringEnabled
         
+        // Ensure transmission frequency is set correctly
+        transmissionFrequency = controller.transmissionFrequency
+        
         enableNetworkTransfer = controller.enableNetworkTransfer
         controller.$enableNetworkTransfer
             .receive(on: DispatchQueue.main)
@@ -51,9 +59,13 @@ class CameraManager: ObservableObject, CaptureDataReceiver {
             .assign(to: \.eventName, on: self)
             .store(in: &cancellables)
         
-        NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification).sink { _ in
-            self.orientation = UIDevice.current.orientation
-        }.store(in: &cancellables)
+        // 移除设备方向监听，因为应用已锁定为竖屏
+        // NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification).sink { _ in
+        //     DispatchQueue.main.async {
+        //         self.orientation = UIDevice.current.orientation
+        //     }
+        // }.store(in: &cancellables)
+        
         controller.delegate = self
     }
     
@@ -99,26 +111,4 @@ class CameraManager: ObservableObject, CaptureDataReceiver {
         }
     }
    
-}
-
-class CameraCapturedData {
-    
-    var depth: MTLTexture?
-    var colorY: MTLTexture?
-    var colorCbCr: MTLTexture?
-    var cameraIntrinsics: matrix_float3x3
-    var cameraReferenceDimensions: CGSize
-
-    init(depth: MTLTexture? = nil,
-         colorY: MTLTexture? = nil,
-         colorCbCr: MTLTexture? = nil,
-         cameraIntrinsics: matrix_float3x3 = matrix_float3x3(),
-         cameraReferenceDimensions: CGSize = .zero) {
-        
-        self.depth = depth
-        self.colorY = colorY
-        self.colorCbCr = colorCbCr
-        self.cameraIntrinsics = cameraIntrinsics
-        self.cameraReferenceDimensions = cameraReferenceDimensions
-    }
 }

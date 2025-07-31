@@ -28,7 +28,9 @@
 }
 
 - (void)setupSocketHost:(NSString *)host port:(NSInteger)port {
-    self.socket = [[GCDAsyncSocket alloc] initWithDelegate:self delegateQueue:dispatch_get_main_queue()];
+    // 创建专用的后台队列用于网络操作
+    dispatch_queue_t networkQueue = dispatch_queue_create("com.iliDAR.network", DISPATCH_QUEUE_SERIAL);
+    self.socket = [[GCDAsyncSocket alloc] initWithDelegate:self delegateQueue:networkQueue];
     NSError *error = nil;
     
     self.isConnecting = YES;
@@ -38,7 +40,9 @@
         NSLog(@"Fail to connect: %@", error.localizedDescription);
         self.isConnecting = NO;
         if (self.connectionCallback) {
-            self.connectionCallback(NO); // link failed
+            dispatch_async(dispatch_get_main_queue(), ^{
+                self.connectionCallback(NO); // link failed
+            });
         }
     }
 }

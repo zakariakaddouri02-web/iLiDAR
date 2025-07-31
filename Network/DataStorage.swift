@@ -16,6 +16,11 @@ class DataStorage {
     let compressionQuality: CGFloat = 0.4
     var readyToSend: Bool = false
     
+    // 添加缓存机制
+    private var lastTransmittedFrame: String = ""
+    private var frameCache: [String: Data] = [:]
+    private let maxCacheSize = 10
+    
     private(set) var currentHostIP = "10.129.164.22"
     private(set) var currentPort = 5678
     
@@ -134,26 +139,31 @@ class DataStorage {
             return
         }
         
-        let ciImage = CIImage(cvImageBuffer: imageData)
-        let context = CIContext(options: nil)
-        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
-            print("Error converting CVImageBuffer to JPEG data.")
-            return
-        }
-        let uiImage = UIImage(cgImage: cgImage)
-        // compress the figure for better transmission
-        guard let jpegData = uiImage.jpegData(compressionQuality: compressionQuality) else {
-            print("Error converting UIImage to JPEG data.")
-            return
-        }
-        
-        if let transmitDepth = convertDepthData(depthData: depthData) {
-            socketManager.sendBIN(fileName: fileName + ".bin", data: transmitDepth)
+        // 使用后台队列进行数据转换，避免阻塞主线程
+        DispatchQueue.global(qos: .userInitiated).async {
+            // 创建共享的CIContext以提高效率
+            let context = CIContext(options: [.useSoftwareRenderer: false])
             
-        } else {
-            print("Fail to convert depth data.")
+            let ciImage = CIImage(cvImageBuffer: imageData)
+            guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
+                print("Error converting CVImageBuffer to JPEG data.")
+                return
+            }
+            let uiImage = UIImage(cgImage: cgImage)
+            // compress the figure for better transmission
+            guard let jpegData = uiImage.jpegData(compressionQuality: self.compressionQuality) else {
+                print("Error converting UIImage to JPEG data.")
+                return
+            }
+            
+            if let transmitDepth = self.convertDepthData(depthData: depthData) {
+                self.socketManager.sendBIN(fileName: fileName + ".bin", data: transmitDepth)
+                
+            } else {
+                print("Fail to convert depth data.")
+            }
+            self.socketManager.sendJPG(fileName: fileName + ".jpg", data: jpegData)
         }
-        socketManager.sendJPG(fileName: fileName + ".jpg", data: jpegData)
     }
     
     func transmitConfig(calibrationData: AVCameraCalibrationData, fileName: String) {

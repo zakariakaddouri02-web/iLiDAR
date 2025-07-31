@@ -1,5 +1,5 @@
 /*
-See the LICENSE.txt file for this sample’s licensing information.
+See the LICENSE.txt file for this sample's licensing information.
 
 Abstract:
 View extensions to help with drawing the camera streams correctly on all device orientations.
@@ -26,43 +26,12 @@ extension View {
     }
     
     var rotationAngle: Double {
-        var angle = 0.0
-        switch viewOrientation {
-        case .up:
-            angle = -Double.pi / 2
-        case .down:
-            angle = Double.pi / 2
-        case .left:
-            angle = Double.pi
-        case .right:
-            angle = 0
-        default:
-            angle = 0
-        }
-        return angle
+        // Fixed to 0 degrees since we locked the orientation
+        return 0.0
     }
 
     var viewOrientation: UIImage.Orientation {
-        var result = UIImage.Orientation.up
-       
-        guard let currentWindowScene = UIApplication.shared.connectedScenes.first(
-            where: { $0.activationState == .foregroundActive }) as? UIWindowScene
-        else { return result }
-        
-        let interfaceOrientation = currentWindowScene.interfaceOrientation
-        switch interfaceOrientation {
-        case .portrait:
-            result = .right
-        case .portraitUpsideDown:
-            result = .left
-        case .landscapeLeft:
-            result = .down
-        case .landscapeRight:
-            result = .up
-        default:
-            result = .up
-        }
-            
-        return result
+        // Fixed to .right (portrait) since we locked the orientation
+        return .right
     }
 }

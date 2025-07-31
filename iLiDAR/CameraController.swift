@@ -9,13 +9,39 @@ An object that configures and manages the capture pipeline to stream video and L
 
 import Foundation
 import AVFoundation
-import CoreImage
+import Metal
+import simd
 
+// MARK: - Protocols
 protocol CaptureDataReceiver: AnyObject {
     func onNewData(capturedData: CameraCapturedData)
     func onNewPhotoData(capturedData: CameraCapturedData)
 }
 
+// MARK: - Camera Captured Data
+class CameraCapturedData {
+    
+    var depth: MTLTexture?
+    var colorY: MTLTexture?
+    var colorCbCr: MTLTexture?
+    var cameraIntrinsics: matrix_float3x3
+    var cameraReferenceDimensions: CGSize
+
+    init(depth: MTLTexture? = nil,
+         colorY: MTLTexture? = nil,
+         colorCbCr: MTLTexture? = nil,
+         cameraIntrinsics: matrix_float3x3 = matrix_float3x3(),
+         cameraReferenceDimensions: CGSize = .zero) {
+        
+        self.depth = depth
+        self.colorY = colorY
+        self.colorCbCr = colorCbCr
+        self.cameraIntrinsics = cameraIntrinsics
+        self.cameraReferenceDimensions = cameraReferenceDimensions
+    }
+}
+
+// MARK: - Camera Controller
 class CameraController: NSObject, ObservableObject {
     
     enum ConfigurationError: Error {
@@ -25,6 +51,20 @@ class CameraController: NSObject, ObservableObject {
     
     @Published var enableNetworkTransfer: Bool = false
     @Published var eventName: String = ""
+    
+    // Transmission frequency control
+    var transmissionFrequency: Int = 4 { // Default 4 FPS
+        didSet {
+            print("🔄 Transmission frequency updated to: \(transmissionFrequency) FPS")
+        }
+    }
+    
+    // Simple transmission counter
+    private var transmissionCounter = 0
+    
+    // FPS control
+    private var frameTimeInterval: TimeInterval = 0.25 // Default 0.25 seconds per transmission (4 FPS)
+    private var lastTransmissionTime: TimeInterval = 0
     
     private let preferredWidthResolution = 1920
     private var frameCounter = 0
@@ -72,6 +112,13 @@ class CameraController: NSObject, ObservableObject {
         eventName = DataStorage.shared.eventName()
         print("A new record event begins")
         enableNetworkTransfer.toggle()
+        
+        // Reset transmission statistics
+        if enableNetworkTransfer {
+            frameCounter = 0
+            // transmissionStats = TransmissionStats() // Removed as per edit hint
+            print("🔄 Reset frame counter and transmission stats")
+        }
     }
     
     private func setupSession() throws {
@@ -190,10 +237,29 @@ extension CameraController: AVCaptureDataOutputSynchronizerDelegate {
         frameCounter += 1
 
         if self.enableNetworkTransfer{
-            if frameCounter % 1 == 0 {         // do not convert 30 Hz to 15 Hz, transmit as much as possible
+            // Prevent frameCounter overflow, reset every 1000 frames
+            if frameCounter > 1000 {
+                frameCounter = 1
+            }
+            
+            // Use time-based FPS control
+            let currentTime = CACurrentMediaTime()
+            if transmissionFrequency > 0 {
+                frameTimeInterval = 1.0 / Double(transmissionFrequency)
+            }
+            
+            if currentTime - lastTransmissionTime >= frameTimeInterval {
                 let fileName = "\(eventName)_\(DataStorage.shared.frameName(frameCounter: frameCounter))"
                 let convertedDepth = syncedDepthData.depthData.converting(toDepthDataType: kCVPixelFormatType_DepthFloat16).depthDataMap
                 DataStorage.shared.transmitFrame(imageData: pixelBuffer, depthData: convertedDepth, fileName: fileName)
+                
+                transmissionCounter += 1
+                lastTransmissionTime = currentTime
+                
+                // Only output detailed logs in debug mode
+                #if DEBUG
+                print("✅ Transmitting frame \(frameCounter) at \(transmissionFrequency) FPS (total: \(transmissionCounter))")
+                #endif
             }
             
             if !self.isConfigTransmitted {
