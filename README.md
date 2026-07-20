@@ -2,6 +2,8 @@
 
 iLiDAR is an iOS application that transforms your iPhone into a powerful multi-modal visual sensor by leveraging the built-in LiDAR scanner and RGB camera. The app enables real-time streaming of both depth maps and color images to a PC server for data collection and analysis.
 
+[Project page](https://galaxywalk.github.io/project/ilidar/) · [Full tutorial](full_tutorial.md)
+
 ## App Overview
 
 iLiDAR provides an intuitive interface for capturing and streaming LiDAR depth data alongside RGB video. The app features:
@@ -39,14 +41,13 @@ Only specific iPhone models equipped with LiDAR are supported. Ensure your devic
 ### Setting Up the Server
 
 1. Ensure both your iPhone and PC are connected to the same Wi-Fi network
-2. Navigate to the Server directory and run:
+2. From the repository root, run:
 
 ```bash
-conda create -n ilidar python=3.10 -y
-conda activate
-pip install -r requirements.txt
-
 cd Server
+conda create -n ilidar python=3.10 -y
+conda activate ilidar
+pip install -r requirements.txt
 python ios_driver.py
 ```
 
