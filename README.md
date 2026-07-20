@@ -1,4 +1,4 @@
-# iLiDAR
+# iLiDAR — Real-Time iPhone LiDAR + RGB-D Streaming
 
 iLiDAR is an iOS application that transforms your iPhone into a powerful multi-modal visual sensor by leveraging the built-in LiDAR scanner and RGB camera. The app enables real-time streaming of both depth maps and color images to a PC server for data collection and analysis.
 
