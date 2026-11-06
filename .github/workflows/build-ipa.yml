@@ -1,0 +1,50 @@
+
+name: Build iLiDAR IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods
+          pod install --repo-update
+
+      - name: Find scheme
+        id: scheme
+        run: |
+          xcodebuild -list -json -workspace iLiDAR.xcworkspace > schemes.json
+          SCHEME=$(python3 -c "import json; d=json.load(open('schemes.json')); print(next(s for s in d['workspace']['schemes'] if s != 'Pods-iLiDAR'))")
+          echo "name=$SCHEME" >> "$GITHUB_OUTPUT"
+
+      - name: Build iOS app
+        run: |
+          xcodebuild archive \
+            -workspace iLiDAR.xcworkspace \
+            -scheme "${{ steps.scheme.outputs.name }}" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/iLiDAR.xcarchive \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/iLiDAR.xcarchive/Products/Applications/*.app Payload/
+          zip -r iLiDAR-unsigned.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: iLiDAR-unsigned-IPA
+          path: iLiDAR-unsigned.ipa
