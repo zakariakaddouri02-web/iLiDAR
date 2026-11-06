@@ -13,7 +13,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
 
       - name: Install CocoaPods
         run: |
@@ -24,7 +26,13 @@ jobs:
         id: scheme
         run: |
           xcodebuild -list -json -workspace iLiDAR.xcworkspace > schemes.json
+
+          echo "=== AVAILABLE SCHEMES ==="
+          cat schemes.json
+
           SCHEME=$(python3 -c "import json; d=json.load(open('schemes.json')); print(next(s for s in d['workspace']['schemes'] if s != 'Pods-iLiDAR'))")
+
+          echo "Selected scheme: $SCHEME"
           echo "name=$SCHEME" >> "$GITHUB_OUTPUT"
 
       - name: Build iOS app
@@ -34,16 +42,33 @@ jobs:
             -scheme "${{ steps.scheme.outputs.name }}" \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath build/iLiDAR.xcarchive \
+            -archivePath "$PWD/build/iLiDAR.xcarchive" \
             CODE_SIGNING_ALLOWED=NO
+
+      - name: Debug archive contents
+        if: always()
+        run: |
+          echo "=== ARCHIVE CONTENTS ==="
+          find build/iLiDAR.xcarchive -maxdepth 6 -print || true
+
+          echo "=== APP FILES ==="
+          find . -name "*.app" -print || true
 
       - name: Package IPA
         run: |
+          APP_PATH=$(find build/iLiDAR.xcarchive/Products/Applications -maxdepth 1 -name "*.app" -print -quit)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: No .app found in archive."
+            exit 1
+          fi
+
           mkdir -p Payload
-          cp -R build/iLiDAR.xcarchive/Products/Applications/*.app Payload/
+          cp -R "$APP_PATH" Payload/
           zip -r iLiDAR-unsigned.ipa Payload
 
       - name: Upload IPA
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: iLiDAR-unsigned-IPA
