@@ -69,11 +69,15 @@ struct DataPacket {
 
 class SocketManager {
     let socketHandler = CocoaAsyncSocketHandler()
+    var disconnectionHandler: (() -> Void)?
 
     init() {
         // Configure response handling closure
-        socketHandler.getResponseBlock = { response in
+        socketHandler.getResponseBlock = { [weak self] response in
             print("Received server response: \(response)")
+            if response == "Disconnected from server." {
+                self?.disconnectionHandler?()
+            }
         }
     }
     

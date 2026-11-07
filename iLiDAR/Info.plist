@@ -3,12 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string></string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>iLiDAR uses the camera and LiDAR sensor to capture synchronized color and depth frames.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>iLiDAR sends captured color and depth frames to your computer over your local Wi-Fi network.</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>

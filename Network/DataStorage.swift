@@ -25,6 +25,12 @@ class DataStorage {
     private(set) var currentPort = 5678
     
     init() {
+        socketManager.disconnectionHandler = { [weak self] in
+            DispatchQueue.main.async {
+                self?.readyToSend = false
+                print("Server connection lost; reconnect from Settings before resuming transfer.")
+            }
+        }
         socketManager.connectToServer(host_ip: currentHostIP, port: currentPort) { success in
                     if success {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {

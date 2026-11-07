@@ -1,10 +1,8 @@
-# Uncomment the next line to define a global platform for your project
-# platform :ios, '15.6'
+# Keep this aligned with IPHONEOS_DEPLOYMENT_TARGET in the Xcode project.
+platform :ios, '15.4'
 
 target 'iLiDAR' do
   pod 'CocoaAsyncSocket'
-  pod 'AFNetworking'
-  pod 'ReactiveCocoa', '~> 11.0'
   source 'https://github.com/CocoaPods/Specs.git'
   
 end

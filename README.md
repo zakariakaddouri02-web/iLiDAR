@@ -106,7 +106,28 @@ The system follows a structured naming convention:
 ### Performance Tuning
 
 - **Image Compression**: RGB images are compressed to 0.4 quality by default. Modify `DataStorage.compressionQuality` based on your network conditions.
-- **Frame Rate**: Default transmission rate is 30 FPS but you can adjust it on the settings.
+- **Frame Rate**: Default transmission rate is 4 FPS; you can adjust it in Settings.
+
+### Stream format and receiver settings
+
+The app connects to the Windows PC's IPv4 address and TCP port `5678`. Set the address in the app's network settings; `Server/ios_driver.py` binds to `0.0.0.0:5678`. Allow Python through Windows Defender Firewall on private networks and keep both devices on the same Wi-Fi network. After a connection drops, the app disables transfer; reconnect from Settings before resuming. Automatic retry is not implemented.
+
+Each RGB and depth file uses the same frame timestamp and frame number. Files are sent as TCP chunks with a 1-byte UTF-8 filename length, filename, 1-byte type (`1` JPEG, `2` depth binary, `3` CSV), 4-byte big-endian payload length, 4-byte big-endian chunk sequence, 1-byte last-chunk flag, then payload. TCP provides ordered delivery; chunk sequence numbers let the receiver reconstruct each file. The app sends the depth file before its matching JPEG. JPEG quality is `0.4`; depth values are uncompressed Float16 meters in the device's native byte order (little-endian on iPhone), row padding removed. A per-session CSV contains camera intrinsics (`fx,fy,cx,cy`). The transfer frequency defaults to 4 FPS and is adjustable in the app.
+
+Depth width and height are not included in the `.bin` file or current CSV. `Server/read_depth_data.py` currently assumes `320 × 240`; change `depth_width` and `depth_height` there to the actual dimensions selected by the iPhone capture format. The app logs the selected depth format at startup. Each depth file must contain exactly `width × height × 2` bytes. You can inspect a file with:
+
+```python
+from pathlib import Path
+print(Path("uploads/FRAME.bin").stat().st_size)
+```
+
+For example, `153600` bytes corresponds to `320 × 240` Float16 values. If the selected device format differs, use its logged dimensions in `read_depth_data.py`; the receiver cannot reliably infer shape from raw Float16 bytes alone. RGB images are JPEGs and their dimensions should be read from the JPEG itself. Python dependencies are listed in `Server/requirements.txt` (`numpy`, `scipy`, `matplotlib`, and `Pillow`). Frame pairing is by the shared filename, while AVCapture synchronizes RGB and depth at capture time. Confirm selected dimensions and sustained frame rate on a physical iPhone 12 Pro Max.
+
+### AltStore installation
+
+The GitHub Actions IPA is unsigned because the workflow has no signing credentials. AltServer can sign an imported IPA for installation using a free Apple ID, subject to Apple's free provisioning limits: installed apps expire after 7 days and require periodic refresh, with a limit of three active sideloaded apps. Follow AltStore's [Windows installation guide](https://faq.altstore.io/altstore-classic/how-to-install-altstore-windows): install iTunes and iCloud directly from Apple, install and run AltServer as administrator, connect and trust the iPhone, then install AltStore from the AltServer tray menu. To install the downloaded IPA, hold **Shift** while clicking AltServer and choose **Sideload .ipa…**. Keep AltServer running for refreshes; background refresh requires AltServer and a usable connection. This does not provide App Store distribution or a permanent signature. See [AltStore's refresh and app-limit notes](https://faq.altstore.io/altstore-classic/your-altstore).
+
+The bundle identifier is `com.zakariakaddouri.ilidar`. If it is already registered to another developer account, AltStore signing may require changing it to a unique identifier before installation.
 
 ## Reference
 

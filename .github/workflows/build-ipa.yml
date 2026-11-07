@@ -1,23 +1,29 @@
-
 name: Build iLiDAR IPA
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: macos-15
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v5
+      - name: Check out source
+        uses: actions/checkout@v4
 
-      - name: Select Xcode
+      - name: Select Xcode 16.4
         run: |
-          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
           xcodebuild -version
+
+      - name: Install pinned CocoaPods
+        run: |
+          sudo gem install cocoapods -v 1.16.2 --no-document
+          pod _1.16.2_ --version
+          test "$(pod _1.16.2_ --version)" = "1.16.2"
 
       - name: Cache CocoaPods
         uses: actions/cache@v4
@@ -25,31 +31,32 @@ jobs:
           path: |
             Pods
             ~/Library/Caches/CocoaPods
-          key: ${{ runner.os }}-pods-${{ hashFiles('Podfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pods-
+          key: ${{ runner.os }}-xcode-16.4-cocoapods-1.16.2-${{ hashFiles('Podfile.lock') }}
 
-      - name: Install CocoaPods
+      - name: Install locked dependencies
         run: |
-          if [ -f Podfile.lock ]; then
-            pod install --deployment
-          else
-            pod install
-          fi
+          lock_before=$(shasum -a 256 Podfile.lock | awk '{print $1}')
+          pod _1.16.2_ install --deployment --verbose
+          lock_after=$(shasum -a 256 Podfile.lock | awk '{print $1}')
+          test "$lock_before" = "$lock_after" || { echo 'Podfile.lock changed during deployment install'; exit 1; }
+          test -f Pods/Manifest.lock
+          cmp Podfile.lock Pods/Manifest.lock
 
-      - name: Verify Project
+      - name: Validate workspace and app scheme
         run: |
-          echo "=== PROJECT FILES ==="
-          find . \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) -print
-
-          echo "=== WORKSPACE SCHEMES ==="
           xcodebuild -list -workspace iLiDAR.xcworkspace
+          schemes=$(xcodebuild -list -workspace iLiDAR.xcworkspace -json)
+          echo "$schemes" | /usr/bin/python3 -c 'import json,sys; d=json.load(sys.stdin); assert "iLiDAR" in d["workspace"]["schemes"], "Shared iLiDAR scheme is missing"'
+          xcodebuild -showBuildSettings -workspace iLiDAR.xcworkspace -scheme iLiDAR -configuration Release -destination 'generic/platform=iOS' > build-settings.txt
+          grep -q 'PRODUCT_TYPE = com.apple.product-type.application' build-settings.txt
+          grep -q 'PRODUCT_BUNDLE_IDENTIFIER = com.zakariakaddouri.ilidar' build-settings.txt
+          grep -q 'IPHONEOS_DEPLOYMENT_TARGET = 15.4' build-settings.txt
+          grep -q 'SKIP_INSTALL = NO' build-settings.txt
 
-          echo "=== PROJECT TARGETS ==="
-          xcodebuild -list -project iLiDAR.xcodeproj
-
-      - name: Archive iLiDAR App
+      - name: Archive iLiDAR for physical iPhone
         run: |
+          set -o pipefail
+          mkdir -p build
           xcodebuild archive \
             -workspace iLiDAR.xcworkspace \
             -scheme iLiDAR \
@@ -58,37 +65,31 @@ jobs:
             -archivePath "$PWD/build/iLiDAR.xcarchive" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
+            CODE_SIGN_IDENTITY= 2>&1 | tee build/archive.log
 
-      - name: Verify Application
+      - name: Verify archived app and package IPA
         run: |
-          ARCHIVE_PATH="$PWD/build/iLiDAR.xcarchive"
-          APP_PATH="$ARCHIVE_PATH/Products/Applications/iLiDAR.app"
+          set -euo pipefail
+          archive="$PWD/build/iLiDAR.xcarchive"
+          app="$archive/Products/Applications/iLiDAR.app"
+          test -d "$app" || { echo 'Expected application missing from archive'; find "$archive/Products" -maxdepth 4 -print; exit 1; }
+          test -x "$app/iLiDAR"
+          test -s "$app/Assets.car"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist" | grep -Fx 'com.zakariakaddouri.ilidar'
+          /usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' "$app/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :NSLocalNetworkUsageDescription' "$app/Info.plist"
+          test -d "$app/Frameworks" || echo 'No embedded third-party frameworks (static CocoaPods linkage).'
+          mkdir -p build/ipa/Payload
+          ditto "$app" build/ipa/Payload/iLiDAR.app
+          (cd build/ipa && zip -qry ../iLiDAR-unsigned.ipa Payload)
+          unzip -t build/iLiDAR-unsigned.ipa
+          unzip -l build/iLiDAR-unsigned.ipa | grep -F 'Payload/iLiDAR.app/Info.plist'
+          test -s build/iLiDAR-unsigned.ipa
 
-          echo "=== ARCHIVE CONTENTS ==="
-          find "$ARCHIVE_PATH/Products" -maxdepth 4 -print
-
-          if [ ! -d "$APP_PATH" ]; then
-            echo "ERROR: iLiDAR.app not found"
-            find "$ARCHIVE_PATH" -type d -name "*.app" -print
-            exit 1
-          fi
-
-          echo "Application found!"
-          file "$APP_PATH/iLiDAR"
-
-          echo "=== BUNDLE IDENTIFIER ==="
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist"
-
-      - name: Package IPA
-        run: |
-          mkdir -p Payload
-          cp -R build/iLiDAR.xcarchive/Products/Applications/iLiDAR.app Payload/
-          zip -r iLiDAR-unsigned.ipa Payload
-
-      - name: Upload IPA
+      - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
           name: iLiDAR-unsigned-IPA
-          path: iLiDAR-unsigned.ipa
+          path: build/iLiDAR-unsigned.ipa
+          if-no-files-found: error
           retention-days: 7
