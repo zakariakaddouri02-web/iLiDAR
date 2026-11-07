@@ -41,6 +41,9 @@ jobs:
           test "$lock_before" = "$lock_after" || { echo 'Podfile.lock changed during deployment install'; exit 1; }
           test -f Pods/Manifest.lock
           cmp Podfile.lock Pods/Manifest.lock
+          test -f 'Pods/Target Support Files/Pods-iLiDAR/Pods-iLiDAR.debug.xcconfig'
+          test -f 'Pods/Target Support Files/Pods-iLiDAR/Pods-iLiDAR.release.xcconfig'
+          ! grep -q 'Pods-LiDARDepth' iLiDAR.xcodeproj/project.pbxproj
 
       - name: Validate workspace and app scheme
         run: |

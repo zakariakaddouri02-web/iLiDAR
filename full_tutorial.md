@@ -42,7 +42,7 @@ Then, run
 pod install
 ```
 
-This may take some time, and you may need to ensure your VPN is set up correctly. After the installation completes, open the `LiDARDepth.xcworkspace file`, and you'll see two targets: `LiDARDepth` and `Pods`.
+After installation, open `iLiDAR.xcworkspace`. The app target is `iLiDAR`; CocoaPods adds its `Pods-iLiDAR` support target.
 
 ### (Optional) Possible Troubleshooting
 
@@ -52,7 +52,7 @@ By default, the configuration files might be incorrect. You may encounter the fo
 [Error] The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.
 ```
 
-To resolve this, go to `LiDARDepth` target -> Project -> Configuration -> Info, and change the configuration files for Debug and Release to the generated ones. For Debug, use `Pods-LiDARDepth.debug.xconfig`, and for Release, use `Pods-LiDARDepth.release.xconfig`. These configurations will ensure correct compiling and linking. If you don't have a professional development account, you may also need to add the original configuration file code from `LiDARDepth/Configuration/SampleCode` to both the Debug and Release configuration files to maintain the correct permissions.
+Run `pod install` from the repository root and open `iLiDAR.xcworkspace`. The app target's Debug and Release base configurations must resolve to `Pods/Target Support Files/Pods-iLiDAR/Pods-iLiDAR.debug.xcconfig` and `Pods/Target Support Files/Pods-iLiDAR/Pods-iLiDAR.release.xcconfig`. Do not select or archive the CocoaPods target as the application.
 
 ### Replace Code
 
