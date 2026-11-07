@@ -22,88 +22,50 @@ jobs:
           sudo gem install cocoapods
           pod install --repo-update
 
-      - name: Find workspace and schemes
-        id: scheme
+      - name: Verify iLiDAR target
         run: |
-          echo "===== PROJECT FILES ====="
-          find . \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) -print
+          echo "=== WORKSPACE SCHEMES ==="
+          xcodebuild -list -workspace iLiDAR.xcworkspace
 
-          echo "===== WORKSPACE SCHEMES ====="
-          xcodebuild -list -json -workspace iLiDAR.xcworkspace > schemes.json
-          cat schemes.json
+          echo "=== PROJECT TARGETS ==="
+          xcodebuild -list -project iLiDAR.xcodeproj
 
-          echo "===== AVAILABLE SCHEMES ====="
-          python3 - <<'PY'
-          import json
-          data = json.load(open("schemes.json"))
-          for scheme in data["workspace"]["schemes"]:
-              print(scheme)
-          PY
-
-          echo "===== PROJECT TARGETS ====="
-          xcodebuild -list -project iLiDAR.xcodeproj || true
-
-          SCHEME=$(python3 -c "import json; d=json.load(open('schemes.json')); print(next(s for s in d['workspace']['schemes'] if s != 'Pods-iLiDAR'))")
-
-          echo "Selected scheme: $SCHEME"
-          echo "name=$SCHEME" >> "$GITHUB_OUTPUT"
-
-      - name: Build iOS app
+      - name: Build iLiDAR application
         run: |
           xcodebuild archive \
             -workspace iLiDAR.xcworkspace \
-            -scheme "${{ steps.scheme.outputs.name }}" \
+            -scheme iLiDAR \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$PWD/build/iLiDAR.xcarchive" \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Debug archive contents
-        if: always()
+      - name: Verify application
         run: |
-          echo "===== ARCHIVE CONTENTS ====="
-          find build/iLiDAR.xcarchive -maxdepth 7 -print || true
+          echo "=== APPLICATION FILES ==="
+          find build/iLiDAR.xcarchive -type d -name "*.app" -print
 
-          echo "===== APP FILES ====="
-          find . -name "*.app" -print || true
-
-          echo "===== ARCHIVE INFO ====="
-          if [ -f build/iLiDAR.xcarchive/Info.plist ]; then
-            plutil -p build/iLiDAR.xcarchive/Info.plist
-          fi
-
-      - name: Package IPA
-        if: success()
-        run: |
-          APP_PATH=$(find build/iLiDAR.xcarchive -type d -name "*.app" -print -quit)
+          APP_PATH=$(find build/iLiDAR.xcarchive/Products/Applications -maxdepth 1 -type d -name "*.app" -print -quit)
 
           if [ -z "$APP_PATH" ]; then
-            echo "ERROR: No application .app found in archive."
-            echo "The selected scheme may not be an iOS application."
+            echo "ERROR: iLiDAR.app not found"
+            find build/iLiDAR.xcarchive -maxdepth 6 -print
             exit 1
           fi
 
-          echo "Application found: $APP_PATH"
+          echo "SUCCESS: $APP_PATH"
+
+      - name: Package IPA
+        run: |
+          APP_PATH=$(find build/iLiDAR.xcarchive/Products/Applications -maxdepth 1 -type d -name "*.app" -print -quit)
 
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
           zip -r iLiDAR-unsigned.ipa Payload
 
-      - name: Upload build diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: iLiDAR-build-diagnostics
-          path: |
-            schemes.json
-            build/iLiDAR.xcarchive
-          if-no-files-found: warn
-          retention-days: 3
-
       - name: Upload IPA
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: iLiDAR-unsigned-IPA
           path: iLiDAR-unsigned.ipa
-          if-no-files-found: error
+          retention-days: 7
