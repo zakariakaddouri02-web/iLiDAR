@@ -3,34 +3,52 @@ name: Build iLiDAR IPA
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main, master ]
 
 jobs:
   build:
     runs-on: macos-15
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v5
 
       - name: Select Xcode
         run: |
-          sudo xcode-select -s /Applications/Xcode.app
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
           xcodebuild -version
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            Pods
+            ~/Library/Caches/CocoaPods
+          key: ${{ runner.os }}-pods-${{ hashFiles('Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
 
       - name: Install CocoaPods
         run: |
-          sudo gem install cocoapods
-          pod install --repo-update
+          if [ -f Podfile.lock ]; then
+            pod install --deployment
+          else
+            pod install
+          fi
 
-      - name: Verify iLiDAR target
+      - name: Verify Project
         run: |
+          echo "=== PROJECT FILES ==="
+          find . \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) -print
+
           echo "=== WORKSPACE SCHEMES ==="
           xcodebuild -list -workspace iLiDAR.xcworkspace
 
           echo "=== PROJECT TARGETS ==="
           xcodebuild -list -project iLiDAR.xcodeproj
 
-      - name: Build iLiDAR application
+      - name: Archive iLiDAR App
         run: |
           xcodebuild archive \
             -workspace iLiDAR.xcworkspace \
@@ -38,29 +56,34 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$PWD/build/iLiDAR.xcarchive" \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
 
-      - name: Verify application
+      - name: Verify Application
         run: |
-          echo "=== APPLICATION FILES ==="
-          find build/iLiDAR.xcarchive -type d -name "*.app" -print
+          ARCHIVE_PATH="$PWD/build/iLiDAR.xcarchive"
+          APP_PATH="$ARCHIVE_PATH/Products/Applications/iLiDAR.app"
 
-          APP_PATH=$(find build/iLiDAR.xcarchive/Products/Applications -maxdepth 1 -type d -name "*.app" -print -quit)
+          echo "=== ARCHIVE CONTENTS ==="
+          find "$ARCHIVE_PATH/Products" -maxdepth 4 -print
 
-          if [ -z "$APP_PATH" ]; then
+          if [ ! -d "$APP_PATH" ]; then
             echo "ERROR: iLiDAR.app not found"
-            find build/iLiDAR.xcarchive -maxdepth 6 -print
+            find "$ARCHIVE_PATH" -type d -name "*.app" -print
             exit 1
           fi
 
-          echo "SUCCESS: $APP_PATH"
+          echo "Application found!"
+          file "$APP_PATH/iLiDAR"
+
+          echo "=== BUNDLE IDENTIFIER ==="
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist"
 
       - name: Package IPA
         run: |
-          APP_PATH=$(find build/iLiDAR.xcarchive/Products/Applications -maxdepth 1 -type d -name "*.app" -print -quit)
-
           mkdir -p Payload
-          cp -R "$APP_PATH" Payload/
+          cp -R build/iLiDAR.xcarchive/Products/Applications/iLiDAR.app Payload/
           zip -r iLiDAR-unsigned.ipa Payload
 
       - name: Upload IPA
